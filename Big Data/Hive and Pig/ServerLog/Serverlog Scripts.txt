@@ -1,0 +1,148 @@
+#----------------------LOAD TO DATAFRAME:----------------------
+%pyspark
+from pyspark.sql.types import StructType, StructField, DoubleType, StringType
+schema = StructType([       
+# Represents a field in a StructType                    
+  StructField("IP",             StringType()),  
+  StructField("Time",           StringType()),
+  StructField("Request_Type",   StringType()),
+  StructField("Response_Code",  StringType()),
+  StructField("City",           StringType()),
+  StructField("Country",        StringType()),
+  StructField("Isocode",        StringType()),
+  StructField("Latitude",       DoubleType()),
+  StructField("Longitude",      DoubleType())
+])
+
+logs_df = sqlContext.read\
+                    .format("com.databricks.spark.csv")\
+                    .schema(schema)\
+                    .option("header", "false")\
+                    .option("delimiter", "|")\
+                    .load("/tmp/nifioutput")
+logs_df.show(truncate=False)
+
+#----------------------TIMESTAMP:----------------------
+%pyspark
+
+from pyspark.sql.functions import udf
+
+months = {
+  'Jan': 1, 'Feb': 2, 'Mar':3, 'Apr':4, 'May':5, 'Jun':6, 'Jul':7, 'Aug':8,  'Sep': 9, 'Oct':10, 'Nov': 11, 'Dec': 12
+}
+
+def parse_timestamp(time):
+    """ This function takes a Time string parameter of logs_df dataframe
+    Returns a string suitable for passing to CAST('timestamp') in the format YYYY-MM-DD hh:mm:ss
+    """
+    return "{0:04d}-{1:02d}-{2:02d} {3:02d}:{4:02d}:{5:02d}".format(
+      int(time[7:11]),
+      months[time[3:6]],
+      int(time[0:2]),
+      int(time[12:14]),
+      int(time[15:17]),
+      int(time[18:20])
+    )
+
+udf_parse_timestamp = udf(parse_timestamp)
+
+parsed_df = logs_df.select('*',             
+                udf_parse_timestamp(logs_df['Time'])  
+                .cast('timestamp')              
+                .alias('Timestamp')).drop('Time')   # Assigning the Timestamp name to the new column and dropping the old Time column                       
+parsed_df.cache()                                   # Stores the dataframe in cache for the future use
+parsed_df.show()                                    # Displays the results
+
+#----------------------CLEAN:----------------------
+%pyspark
+parsed_df.select('Request_type').show(truncate=False)
+%pyspark
+from pyspark.sql.functions import split, regexp_extract
+path_df = parsed_df.select('*',regexp_extract('Request_Type', r'^.*\w+\s+([^\s]+)\s+HTTP.*', 1)
+                   .alias('Request_Path')).drop('Request_Type')                                                                       
+path_df.cache()                                                        # Cache the dataframe
+path_df.show(truncate=False)                                           # Displays the results
+
+
+#----------------------Freq Hosts:----------------------
+%pyspark
+most_frequent_hosts = parsed_df.groupBy("IP").count()           # Groups the dataframe by IP column and then counting
+most_frequent_hosts.show()		                                # Displays the results
+most_frequent_hosts.registerTempTable("most_frequent_hosts")    # Registering most_frequest_hosts variable as a temporary table
+
+%sql
+SELECT * FROM most_frequent_hosts ORDER BY count DESC LIMIT 20
+
+#----------------------Response CODE:----------------------
+%pyspark
+status_count = path_df.groupBy('Response_Code').count()      # Groups the dataframe by Response_Code column and then counting
+status_count.show()                                          # Displays the results
+status_count.registerTempTable("status_count")               # Registering status_count variable as a temporary table
+
+%sql
+SELECT * FROM status_count ORDER BY Response_Code
+
+%pyspark
+success_logs_df = parsed_df.select('*').filter(path_df['Response_Code'] == 200)       # Creating dataframe where Response Code is 200  
+success_logs_df.cache()                                                               # Cache the dataframe
+success_logs_df.show()                                                                # Displays the results
+
+
+%pyspark
+from pyspark.sql.functions import hour
+success_logs_by_hours_df = success_logs_df.select(hour('Timestamp').alias('Hour')).groupBy('Hour').count()      # Extracting the Hour
+success_logs_by_hours_df.show()                                                                                 # Displays the results
+success_logs_by_hours_df.registerTempTable("success_logs_by_hours_df")
+
+%sql
+SELECT * FROM success_logs_by_hours_df ORDER BY Hour
+
+# DATA CLEANSE
+%pyspark
+from pyspark.sql.functions import split, regexp_extract
+extension_df = path_df.select(regexp_extract('Request_Path','(\\.[^.]+)$',1).alias('Extension'))
+extension_df.show(truncate=False)
+
+%pyspark
+from pyspark.sql.functions import split, regexp_replace
+extension_df = extension_df.select(regexp_replace('Extension','\.','').alias('Extension'))  # Replace the dot character with the blank character
+extension_df.show(truncate=False)                                                           # Displays the results
+
+%pyspark
+from pyspark.sql.functions import *
+extension_df = extension_df.replace('','None','Extension').alias('Extension')   # Replaces the blank value with the value 'None' in Extension
+extension_df.cache()
+extension_df.show(truncate=False)                                               # Shows the results
+
+# ANALYSIS ON EXTENSIONS:
+%pyspark
+from pyspark.sql.functions import *
+extension_df_count = extension_df.groupBy('Extension').count()                  # Groups the dataframe by Extension and then count the rows
+extension_df_count.show()                                                       # Displays the results
+extension_df_count.registerTempTable('extension_df_count')                      # Registers the temporary table
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# VISUALIZATION
+%pyspark
+path_df.registerTempTable("path_df")
+
+%sql
+CREATE TABLE path_df AS SELECT * FROM path_df
+
+%sql
+SELECT country,count(country) AS count from path_df GROUP BY country ORDER BY count
+
+%sql
+SELECT city, count(city) AS count from path_df where country='United States' GROUP BY city ORDER BY count
