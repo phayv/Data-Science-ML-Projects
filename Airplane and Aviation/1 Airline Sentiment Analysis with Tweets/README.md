@@ -1,5 +1,6 @@
 # Text Mining and Sentiment Analysis on Tweets About Airlines
 I did the project all on one notebook, so it is probably fairly big.  
+This project was done in R 
 
 Here are some conclusions:
 - Most tweets have negative sentiment (>60%) and most are from the US.
