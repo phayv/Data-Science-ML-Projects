@@ -16,12 +16,15 @@ Here is the process I have in mind:
 From Part 0: Analyzing Twitter Sentiment with NLTK  
 - Find out happiness sentiment of Twitter
 - Get insight to how people feel in general and specific times of the year to see if it affects what movies people like to see.
+
 From Part 1: Analyzing Best Type of Movies  
 - Find out best features for overall high IMDB score.
 - Create dataset of reviews of movies from IMDB with those top features and specific genre(s).
 - Perform Text Mining on review dataset to find key elements that reviewers liked for in movies. 
+
 From Part 2: NOT YET THERE  
 - Add key elements data to movie data, train and make a model (probably NB?)
+
 From Part 3: NOT YET THERE
 - 
 
