@@ -5,10 +5,10 @@ import json
 import sentiment_mod as s
 
 #consumer key, consumer secret, access token, access secret.
-ckey="asdfsafsafsaf"
-csecret="asdfasdfsadfsa"
-atoken="asdfsadfsafsaf-asdfsaf"
-asecret="asdfsadfsadfsadfsadfsad"
+ckey=""
+csecret=""
+atoken=""
+asecret=""
 
 from twitterapistuff import *
 
